@@ -13,10 +13,11 @@ from telegram.ext import Application, CommandHandler
 from bot_logic import start, analizar_apuesta
 
 # --- CONFIGURACIÓN Y VARIABLES DE ENTORNO ---
-# La clave de Gemini se busca como GOOGLE_API_KEY en bot_logic.py
+# NOTA: La clave de Gemini se busca como GOOGLE_API_KEY en bot_logic.py
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+# La línea GEMINI_API_KEY ya no está aquí.
 
-# Verificación de la clave de Telegram
+# AHORA SOLO VERIFICAMOS LA CLAVE DE TELEGRAM
 if not TELEGRAM_TOKEN:
     raise ValueError("Falta la variable de entorno TELEGRAM_TOKEN.")
 
@@ -24,14 +25,10 @@ if not TELEGRAM_TOKEN:
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 # Inicialización de la Aplicación de Telegram
-# ------------------------------------------------------------------
-# CAMBIO CRÍTICO: Usar `update_queue=None` para forzar el modo Webhook
-# y evitar el error del objeto 'Updater' (AttributeError).
-# ------------------------------------------------------------------
+# USAMOS LA VERSIÓN LIMPIA DE BUILDER COMPATIBLE CON LA VERSIÓN 20.7
 application = (
     Application.builder()
     .token(TELEGRAM_TOKEN)
-    .update_queue(None) # ESTA ES LA LÍNEA CRÍTICA
     .build()
 )
 
