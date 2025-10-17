@@ -5,17 +5,30 @@ from telegram import Update
 from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
 
-# Inicialización del cliente Gemini
+# -----------------------------------------------------------
+# --- INICIALIZACIÓN DEL CLIENTE GEMINI (CORRECCIÓN CLAVE) ---
+# -----------------------------------------------------------
+client = None
 try:
-    # Se inicializa con la clave del entorno GEMINI_API_KEY
-    client = genai.Client()
+    # 1. Leemos explícitamente la clave del entorno.
+    # Usamos GOOGLE_API_KEY para asegurar compatibilidad total con la librería.
+    API_KEY = os.getenv("GOOGLE_API_KEY") 
+    
+    if not API_KEY:
+        # Si la clave no se encuentra, generamos un error claro
+        raise ValueError("La clave GOOGLE_API_KEY no se encontró en el entorno.")
+        
+    # 2. Inicializamos el cliente pasando la clave directamente.
+    client = genai.Client(api_key=API_KEY)
+    
 except Exception as e:
-    # Esto manejará el caso de que la clave no esté cargada
+    # Este error se mostrará en los logs si la clave está mal o falta
     print(f"Error al inicializar el cliente Gemini: {e}")
     client = None
 
 # -----------------------------------------------------------
 # --- DEFINICIÓN DE LOS PROMPTS DE ESTRATEGIA ---
+# (El contenido es el mismo para mantener sus estrategias)
 # -----------------------------------------------------------
 
 PROMPT_SIMPLE = """
@@ -177,7 +190,6 @@ Proceda a ejecutar el análisis basándose en este prompt y los datos más reale
 # --- MANEJADORES DE COMANDOS DE TELEGRAM ---
 # -----------------------------------------------------------
 
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Maneja el comando /start. Da la bienvenida y las instrucciones."""
     user = update.effective_user
@@ -194,7 +206,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "Procesaré tu solicitud con la máxima rigurosidad estadística y de valor."
     )
     await update.message.reply_html(instructions)
-
 
 async def analizar_apuesta(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
@@ -220,7 +231,7 @@ async def analizar_apuesta(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     apuesta_tipo = args[0].upper()
     fecha_objetivo = args[1]
     cuota_objetivo = args[2]
-
+    
     # 2. Asignar el prompt basado en el TIPO
     if apuesta_tipo == "SIMPLE":
         base_prompt = PROMPT_SIMPLE
@@ -237,7 +248,7 @@ async def analizar_apuesta(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         FECHA_OBJETIVO=fecha_objetivo,
         CUOTA_OBJETIVO=cuota_objetivo
     )
-
+    
     await update.message.reply_text(
         f"⏳ **Analizando Apuesta {apuesta_tipo}** para el {fecha_objetivo} (Cuota ≈ {cuota_objetivo}).\n"
         "Este análisis riguroso puede tardar hasta 45 segundos..."
@@ -249,10 +260,10 @@ async def analizar_apuesta(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             model='gemini-2.5-pro',
             contents=prompt_final
         )
-
+        
         # 5. Enviar la respuesta de la IA a Telegram
         respuesta_formateada = response.text
-
+        
         # Intenta enviar como Markdown, si falla, envía como texto plano.
         try:
             await update.message.reply_text(respuesta_formateada, parse_mode=ParseMode.MARKDOWN_V2)
