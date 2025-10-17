@@ -10,8 +10,8 @@ from telegram.constants import ParseMode
 # -----------------------------------------------------------
 client = None
 try:
-    # 1. Leemos explícitamente la clave del entorno.
-    # Usamos GOOGLE_API_KEY para asegurar compatibilidad total con la librería.
+    # 1. Leemos explícitamente la clave del entorno. 
+    # Usamos GOOGLE_API_KEY porque tiene la mayor prioridad y es más seguro en el hosting.
     API_KEY = os.getenv("GOOGLE_API_KEY") 
     
     if not API_KEY:
@@ -28,7 +28,8 @@ except Exception as e:
 
 # -----------------------------------------------------------
 # --- DEFINICIÓN DE LOS PROMPTS DE ESTRATEGIA ---
-# (El contenido es el mismo para mantener sus estrategias)
+# (Las advertencias de SyntaxWarning con '\g' se deben a caracteres LaTeX en los prompts.
+# Los mantendremos, ya que no afectan la funcionalidad del bot, pero Python los notifica.)
 # -----------------------------------------------------------
 
 PROMPT_SIMPLE = """
