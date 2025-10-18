@@ -1,69 +1,55 @@
 import os
-import re
 import logging
 from contextlib import asynccontextmanager
 from http import HTTPStatus
 from fastapi import FastAPI, Request, Response
 
-# Librerías de Telegram
-from telegram import Update
-from telegram.ext import Application, CommandHandler
+# Solo importamos Bot y Update (sin telegram.ext)
+from telegram import Bot, Update
 
 # Módulo de Lógica de Negocio
-from bot_logic import start, analizar_apuesta
+from bot_logic import handle_update 
 
 # --- CONFIGURACIÓN Y VARIABLES DE ENTORNO ---
-# NOTA: La clave de Gemini se busca como GOOGLE_API_KEY en bot_logic.py
+# El token debe estar configurado en las variables de entorno de Render
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-# La línea GEMINI_API_KEY ya no está aquí.
 
-# AHORA SOLO VERIFICAMOS LA CLAVE DE TELEGRAM
 if not TELEGRAM_TOKEN:
+    # Esto forzará un error visible si el token falta en Render
     raise ValueError("Falta la variable de entorno TELEGRAM_TOKEN.")
 
 # Configuración del logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
-# Inicialización de la Aplicación de Telegram
-# USAMOS LA VERSIÓN LIMPIA DE BUILDER COMPATIBLE CON LA VERSIÓN 20.7
-application = (
-    Application.builder()
-    .token(TELEGRAM_TOKEN)
-    .build()
-)
+# Inicialización del Bot (NO usamos Application.builder() para evitar el error)
+bot = Bot(token=TELEGRAM_TOKEN) 
 
-# Añadir los manejadores de comandos
-application.add_handler(CommandHandler("start", start))
-application.add_handler(CommandHandler("apuesta", analizar_apuesta))
-
-
-# --- SERVIDOR WEBHOOK (FastAPI) ---
+# --- GESTIÓN DEL LIFESPAN (WEBHOOK SETUP) ---
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Función de 'ciclo de vida' que configura el Webhook en Telegram al inicio.
-    """
+    """Configura el Webhook al iniciar el servicio en Render."""
     logging.info("Iniciando aplicación y configurando Webhook...")
     
-    # 1. Obtener la URL pública del servidor Render.com
+    # Render proporciona esta URL automáticamente
     WEBHOOK_URL = os.getenv("RENDER_EXTERNAL_URL") 
     
     if WEBHOOK_URL:
-        # 2. Establecer el Webhook para que Telegram sepa dónde enviar los mensajes
-        # Usamos el path "/telegram" para la URL del Webhook
-        await application.bot.set_webhook(f"{WEBHOOK_URL}/telegram")
+        # Establecer el Webhook usando el objeto Bot
+        await bot.set_webhook(f"{WEBHOOK_URL}/telegram")
         logging.info(f"Webhook configurado en: {WEBHOOK_URL}/telegram")
     else:
         logging.error("No se encontró RENDER_EXTERNAL_URL. El Webhook no se configuró.")
         
-    async with application:
-        await application.start()
-        yield # El servidor se mantiene corriendo
-        await application.stop()
+    yield # El servidor se mantiene corriendo
+    
+    # Opcional: Limpieza al apagar
+    logging.info("Deteniendo el servicio...")
 
 # Creación de la instancia de FastAPI
 app = FastAPI(lifespan=lifespan)
+
+# --- ENDPOINTS ---
 
 @app.get("/", include_in_schema=False)
 async def health():
@@ -73,17 +59,20 @@ async def health():
 @app.post("/telegram")
 async def telegram_webhook(request: Request):
     """
-    Endpoint principal que recibe todas las actualizaciones (mensajes, etc.) de Telegram.
+    Endpoint que recibe las actualizaciones de Telegram y las pasa a la lógica.
     """
     try:
         data = await request.json()
-        update = Update.de_json(data, application.bot)
         
-        # Procesar la actualización con la aplicación de Telegram
-        await application.process_update(update)
+        # Convertir JSON a objeto Update
+        update = Update.de_json(data, bot)
+        
+        # Procesar la actualización con la lógica de negocio
+        await handle_update(update, bot) 
         
         return Response(status_code=HTTPStatus.OK)
     
     except Exception as e:
         logging.error(f"Error procesando el Webhook: {e}")
-        return Response(status_code=HTTPStatus.INTERNAL_SERVER_ERROR)
+        # Retornamos 200 OK a Telegram para evitar que siga reintentando
+        return Response(status_code=HTTPStatus.OK)
